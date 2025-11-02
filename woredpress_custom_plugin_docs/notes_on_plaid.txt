@@ -1,0 +1,340 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2865
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 .SFNS-Regular;\f1\fnil\fcharset0 .SFNS-Semibold;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f0\fs26 \cf0 When implementing Plaid Link with support for OAuth flows in a WordPress custom plugin, you do not need to manage the full OAuth 2.0 exchange yourself (such as handling raw tokens, refreshes, etc). Plaid acts as the intermediary and orchestrates the OAuth 2.0 authentication with the bank directly within the Link flow.\
+Here's how this fits with WordPress and Plaid:\
+1. The OAuth process with Plaid Link\
+		When a user selects an OAuth-enabled institution in the Link widget, Plaid will automatically redirect the user to the bank's site for authentication, and then back to your specified redirect URI.\
+		After authentication, Plaid returns the user back to your site where Link completes and returns a public_token (as usual).\
+You do not need a general-purpose OAuth client library for communicating with the bank\'97Plaid handles those details for you.\
+2. What is needed on WordPress?\
+The key requirement:\
+		You need to serve a valid redirect URI endpoint that Plaid can use to send users back to your app after the bank\'92s OAuth step.\
+		In the context of WordPress, this is typically a custom page or REST endpoint in your plugin.\
+3. WordPress-compatible OAuth Libraries\
+If you are only using Plaid, you do not need to use a WordPress OAuth library (like oauth2-client from The League of Extraordinary Packages (https://oauth2-client.thephpleague.com/), or WP OAuth Server (https://wp-oauth.com/)) unless:\
+		You are implementing your own separate OAuth 2.0 provider or client with another API.\
+		You want to supplement authentication for some other custom use.\
+For Plaid, just handle the redirect URI and let Link do the OAuth heavy lifting!\
+4. Implementing the Redirect Handler in a WordPress Plugin\
+You need to register a custom route or query var in your plugin to handle the redirect from the bank/Plaid.\
+Example: Add a custom redirect endpoint via WordPress\
+
+\f1\b 1add_action('init', function() \{\
+2    add_rewrite_rule('^plaid-oauth-redirect/?', 'index.php?plaid_oauth_redirect=1', 'top');\
+3\});\
+4\
+5add_filter('query_vars', function($vars) \{\
+6    $vars[] = 'plaid_oauth_redirect';\
+7    return $vars;\
+8\});\
+9\
+10add_action('template_redirect', function() \{\
+11    if (get_query_var('plaid_oauth_redirect')) \{\
+12        // Serve your page or JS that will resume Plaid Link\
+13        // Typically, you'll render a page that includes the Plaid Link initialization with received params\
+14        include plugin_dir_path(__FILE__) . 'plaid-redirect-handler.php';\
+15        exit;\
+16    \}\
+17\});
+\f0\b0 \
+In your Plaid dashboard, set the OAuth redirect URI to:\
+https://your-site.com/plaid-oauth-redirect/\
+5. Integrating Plaid Link with OAuth in Your Plugin\
+		On your client-side code (JavaScript), initialize Link (https://plaid.com/docs/link/web/#oauth) as usual.\
+		Pass in the receivedRedirectUri if you detect you\'92re on the redirect page, so Link resumes after Plaid brings the user back.\
+Example JavaScript:\
+
+\f1\b 1const handler = Plaid.create(\{\
+2  token: '<YOUR_LINK_TOKEN>',\
+3  receivedRedirectUri: window.location.href, // Only pass when on the redirect page\
+4  onSuccess: function(public_token, metadata) \{\
+5    // Send the public_token to your server here\
+6  \},\
+7  // ... other settings\
+8\});\
+9handler.open();
+\f0\b0 \
+6. For More Details\
+		Plaid docs: OAuth Guide for Web (https://plaid.com/docs/link/oauth/)\
+		Plaid Link OAuth Best Practices (https://plaid.com/docs/link/oauth/#best-practices)\
+\
+Summary\
+		You do not need a WordPress-compatible OAuth library for Plaid\'92s use-case.\
+		Let Plaid Link handle OAuth by providing a suitable redirect URI in your plugin.\
+		Your implementation should center around providing a page/endpoint for Plaid to redirect to, and then resuming Link from that page.\
+If you need to do something more complex with OAuth tokens directly (like with the /oauth/token, /oauth/introspect, or /oauth/revoke endpoints), you can use any general-purpose PHP HTTP library (like Guzzle or native wp_remote_post())\'97again, you don't specifically need a dedicated WordPress OAuth library for this Plaid integration.\
+If you\'92d like more specifics or have questions about resuming Link after the redirect, let me know!\
+And if you want to talk about other advanced OAuth, feel free to ask!\
+REFERENCES\
+		Plaid OAuth and JavaScript -- Plaid Academy\uc0\u8232  (https://www.youtube.com/watch?v=E0GwNBFVGik)\u8232 Auth - Money movement partnerships | Plaid Docs\u8232  (https://plaid.com/docs/auth/partnerships/)\u8232 Link - OAuth guide | Plaid Docs\u8232  (https://plaid.com/docs/link/oauth/)\u8232 /oauth/introspect\u8232  (https://plaid.com/docs/api/oauth/)\
+ACTIONS\
+Copy answer\
+Copy link\
+Helpful\
+Not helpful\
+\
+\
+\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\
+\
+\
+\
+
+\f1\b Can I use JetEngine to create a custom endpoint for Plaid or for \'93validation\'94?\
+1. What is JetEngine in this context?\
+
+\f0\b0 JetEngine (https://crocoblock.com/plugins/jetengine/)
+\f1\b  is a WordPress plugin commonly used to create custom post types, custom fields, and REST API endpoints in a WordPress site.\
+2. Can You Use JetEngine Endpoints With Plaid?\
+You can use JetEngine\'92s REST API Endpoint module to create a custom endpoint in WordPress.\
+If you want Plaid (for example, Plaid webhooks, or your own frontend code) to POST data into your WordPress plugin/site, JetEngine can define that endpoint. The important bits:\
+
+\f0\b0 		The endpoint must be public and accept POST requests.\
+		For Plaid webhooks, your endpoint must return a 200 response code after processing.\
+		You may want to validate incoming requests, either by schema or (more secure) by verifying Plaid\'92s webhook request signatures (see Plaid Webhook Verification (https://plaid.com/docs/webhooks/)).\
+
+\f1\b 3. Does The Endpoint Require a \'93Validation\'94 Feature?\
+If by \'93validation\'94 you mean input sanitization, authentication, or signature checking:\
+
+\f0\b0 		For Plaid webhooks: You should validate that the webhook is genuinely from Plaid and, if needed, that the payload matches what you expect (see link above).\
+		For OAuth Redirects: If you\'92re handling the OAuth return step in your app, your endpoint just needs to display a page that can resume the Plaid Link flow\'97it typically does not require cryptographic validation in the way webhooks might.\
+		For general Plaid Link: Validation is generally handled by Plaid. Your responsibility is to handle the redirect and exchange the public_token securely for an access_token.\
+
+\f1\b If you are creating endpoints purely for use as an OAuth redirect URI:\
+You don\'92t need special \'93validation\'94 logic\'97instead, your endpoint/page just needs to let your JavaScript client resume the Plaid Link session.\
+\
+Example Scenarios\
+1. Webhook endpoint using JetEngine\
+If you want your JetEngine endpoint to receive Plaid webhooks, make sure it\'92s accessible, responds with HTTP 200 quickly, and (optionally) verifies the request, like this (pseudo-code):\
+1add_action('rest_api_init', function () \{\
+2  register_rest_route('custom/v1', '/plaid-webhook/', array(\
+3    'methods' => 'POST',\
+4    'callback' => 'your_plaid_webhook_handler',\
+5  ));\
+6\});\
+7\
+8function your_plaid_webhook_handler($request) \{\
+9  // Optionally validate the request\
+10  // Process webhook\
+11  return new WP_REST_Response(['status' => 'ok'], 200);\
+12\}
+\f0\b0 \
+
+\f1\b 2. OAuth redirect endpoint using JetEngine\
+If you use JetEngine just to display the redirect page needed for the OAuth flow, your main \'93validation\'94 is checking that the page loads and your JavaScript passes receivedRedirectUri to Plaid Link as shown in my previous answer.\
+1const handler = Plaid.create(\{\
+2  token: '<YOUR_LINK_TOKEN>',\
+3  receivedRedirectUri: window.location.href,\
+4  // ...\
+5\});\
+6handler.open();
+\f0\b0 \
+
+\f1\b \
+Summary\
+
+\f0\b0 		Yes, you can use JetEngine to create custom endpoints for Plaid integrations in WordPress.\
+		For webhooks: basic validation is recommended.\
+		For OAuth redirect: special \'93validation\'94 code isn\'92t needed; just handle the redirect and resume Link.\
+		The endpoint logic you need depends entirely on what the endpoint needs to do (webhook receiver? redirect for OAuth? collect Plaid tokens?).\
+
+\f1\b If you\'92re looking to implement signature verification or more advanced validation, you\'92ll likely need to use PHP directly or add custom code in your plugin beyond what JetEngine\'92s REST endpoint UI offers.\
+If you have more specific details about who (Plaid, user, admin, another system) is POSTing/GETting to these endpoints and in what scenarios, I can give a more targeted example!\
+\
+If you\'92re looking for Plaid product-specific validation or webhook details, check the 
+\f0\b0 Plaid webhook docs (https://plaid.com/docs/webhooks/)
+\f1\b  or ask for a code example here. And if you ever have a case involving Plaid Exchange or Core Exchange, see:\
+
+\f0\b0 		Plaid Exchange (https://plaid.com/exchange/docs/)\
+		Core Exchange (https://plaid.com/data-connectivity-core-exchange/)\
+
+\f1\b \
+
+\f0\b0 \
+\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\'97\
+\
+\
+\
+Let\'92s break down Plaid\'92s main products/features, the kinds of apps that use them, and a quick note about validation or endpoint requirements in a WordPress/JetEngine context.\
+\
+
+\f1\b 1. Plaid Link\
+
+\f0\b0 What it is:\
+The user-facing widget or flow where your user authenticates and connects their financial account.\
+Use case:\
+Almost every app using Plaid starts here. Think of any scenario where a user needs to link a bank account:\
+		Personal finance trackers\
+		Accounting/dashboard plugins\
+		Payment/loan applications\
+		Wallets or neobanks\
+		Budgeting tools\
+Customer journey:\
+This is typically the very first interaction\'97\'93Connect your bank account.\'94 It collects consent and opens the \'93pipe\'94 to get data.\
+Validation/endpoint stuff:\
+Plaid handles security and validation here. Your job is to safely handle the redirect (for OAuth) and exchange the returned public_token for an access_token server-side.\
+\
+
+\f1\b 2. Transactions (/transactions/sync)\
+
+\f0\b0 What it is:\
+Lets you fetch and stay updated with a user\'92s bank transactions (spending, deposits, etc.). Use /transactions/sync for ongoing/real-time updates.\
+Use case:\
+		Personal finance tool showing spend history\
+		Apps categorizing expenses\
+		Apps sending notifications about incoming transactions\
+		Budgeting, every time the user logs in, or on a schedule\
+Customer journey:\
+After a user links their account, the plugin fetches and shows their latest transactions\'97could be used to update a dashboard or send automatic emails.\
+Validation/endpoint stuff:\
+		Fetching is an authenticated API call (server-server)\'97just make sure you store and protect the access_token.\
+		If you set up webhooks (https://plaid.com/docs/webhooks/), validate that inbound webhooks are genuinely from Plaid (for instance, checking a signature header).\
+\
+
+\f1\b 3. Identity\
+
+\f0\b0 What it is:\
+Returns info like names, addresses, phone numbers from the linked bank account.\
+Use case:\
+		KYC/Identity verification step in onboarding (especially for fintech or compliance)\
+		Pre-filling signup forms\
+		Reducing fraud\
+Customer journey:\
+After linking the bank, the app can automatically fill in or verify user details. Used early in onboarding, before allowing account actions.\
+Validation/endpoint stuff:\
+		Same as Transactions: secure API token handling.\
+		If used in onboarding, build in UI/logic for users to review info.\
+\
+
+\f1\b 4. Auth\
+
+\f0\b0 What it is:\
+Fetches account and routing numbers to initiate payments/debits.\
+Use case:\
+		Setting up ACH payments or direct deposit\
+		Wallet top-ups, bill pay, etc.\
+Customer journey:\
+After linking an account, when a user sets up a new payment method.\
+Validation/endpoint stuff:\
+		Careful with how you store and process sensitive account numbers!\
+		Plaid Link and server-side token exchange as usual.\
+\
+
+\f1\b 5. Income \'96 Payroll, Document, or Bank Income\
+
+\f0\b0 What it is:\
+Verifies how much (and from where) a person is paid, via bank or payroll provider.\
+Use case:\
+		Lending apps (credit scoring)\
+		Rental application plugins\
+		Financial aid forms\
+Customer journey:\
+After account link (or sometimes as a separate \'93verify income\'94 step during an application or onboarding).\
+Webhooks:\
+		Document Income (https://plaid.com/docs/api/products/income/#webhook-document-income) or Payroll: You may need to listen for specific webhooks (e.g. VERIFICATION_STATUS_PROCESSING_COMPLETE) since some checks run in the background.\
+		Set up your webhook endpoint in /link/token/create, securely, and validate inbound requests.\
+\
+
+\f1\b 6. Assets\
+
+\f0\b0 What it is:\
+Generates a certified report with a user\'92s account balances, holdings, and transactions\'97for, e.g., mortgage or loan processing.\
+Use case:\
+		Loan/mortgage origination plugins\
+		Rental screening\
+		Financial planning tools\
+Customer journey:\
+Typically triggered as an extra, manual step when a user applies for something big (mortgage/loan). There can be a delay\'97webhooks alert you when reports are ready.\
+Webhooks:\
+		Listen for "Asset Report is ready" event to know when to fetch the completed report.\
+\
+
+\f1\b 7. Liabilities\
+
+\f0\b0 What it is:\
+Shows current loan balances: credit card, student loans, etc.\
+Use case:\
+		Debt payoff calculators\
+		Credit counseling portals\
+Customer journey:\
+After linking, when displaying financial profile or offering recommendations.\
+\
+
+\f1\b 8. Webhooks\
+
+\f0\b0 What it is:\
+Plaid sends your app automatic updates when anything important happens (new transactions, errors, new accounts, report readiness).\
+Use case:\
+		Keeping data fresh without manual polling\
+		Notifying users of new transactions\
+		Detecting when connection needs refreshing\
+Customer journey:\
+Happens in the background. E.g., the plugin fetches new transaction data or warns the user if connection is lost.\
+Endpoint notes:\
+		Should be a public POST endpoint.\
+		Highly recommend validating inbound webhooks are from Plaid:\
+		Plaid webhook signature docs (https://plaid.com/docs/webhooks/).\
+		Respond quickly (HTTP 200) and process securely.\
+\
+
+\f1\b 9. OAuth Redirects\
+
+\f0\b0 What it is:\
+Some banks (especially in Europe, and some US banks like Chase) require users be sent off to their website to log in\'97Plaid coordinates this.\
+Use case:\
+		Required automatically when a user picks one of these banks in Link.\
+Customer journey:\
+On account-link; your plugin must have a redirect URI endpoint that just resumes Plaid Link when the user comes back. Usually, you show a "Please wait..." spinner and re-launch Link.\
+Endpoint notes:\
+		No cryptographic validation required here\'97just let Plaid Link continue.\
+		You don\'92t process or store sensitive data on this redirect endpoint.\
+\
+
+\f1\b How it might look in a typical WordPress plugin\
+
+\f0\b0 		User installs your plugin, logs in, and clicks \'93Connect Bank Account\'94.\
+		Your plugin launches Plaid Link (client side).\
+		User goes through Link (with possible OAuth bank redirects).\
+		On completion, your plugin exchanges the public_token for an access_token behind the scenes.\
+		Your plugin can now fetch Identity, Transactions, Income, etc. on behalf of the user.\
+		Webhooks (if used) keep your system up-to-date\'97validate them!\
+		Certain features (Assets, Income verification) may require extra steps or waiting for Plaid to notify your system via webhook.\
+\
+
+\f1\b Summary Table\
+
+\f0\b0 Feature\
+Typical App Stage\
+Does endpoint need validation?\
+Plaid Link\
+Account connection/onboarding\
+No (Plaid validates)\
+Transactions\
+Post-link, dashboard/updates\
+Yes (for webhooks)\
+Identity\
+Post-link, onboarding/KYC\
+API security\
+Auth\
+Payment setup/ACH\
+API security\
+Income\
+Pre-loan/verification flow\
+Yes (for webhooks)\
+Assets\
+Loan/rental/mortgage application\
+Yes (for webhooks)\
+Liabilities\
+Profile/credit tools\
+API security\
+Webhooks\
+Background/any change\
+Highly recommended\
+OAuth Redirect\
+During link flow (OAuth banks)\
+No (just resume Link on redirect page)\
+If you want sample code for a particular feature or plugin routine, just ask!}
